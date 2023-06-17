@@ -1,10 +1,21 @@
+import database.OfficeDataBaseFabric;
+import database.OfficeRepository;
+import database.Table;
+import model.Worker;
+
 import javax.swing.*;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Dialog;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.sql.*;
+import java.util.List;
+import java.util.Optional;
 
 public class Main extends JFrame {
     private JPanel Panel_Main;
@@ -18,8 +29,6 @@ public class Main extends JFrame {
 
     public Main() {
 
-
-
         find_by_name_btn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
@@ -31,12 +40,9 @@ public class Main extends JFrame {
     }
 
     public static void main(String[] args) {
-        String concatinate = "";
-        try {
-            Connection con = DriverManager.getConnection("jdbc:postgresql://localhost:5432/office","postgres","postgres");
-            PreparedStatement statmentWorkers =  con.prepareStatement("select * from office.office_worker");
-            ResultSet officeSetWorkers = statmentWorkers.executeQuery();
-
+        Table officeWorkerTable = OfficeDataBaseFabric.createOfficeTableWithTestData();
+        Table officePhoneTable = OfficeDataBaseFabric.createPhoneNumberTable();
+        OfficeRepository repo = new OfficeRepository(officeWorkerTable, officePhoneTable);
 
             JFrame frame = new JFrame("Main");
             frame.setResizable(false);
@@ -57,17 +63,14 @@ public class Main extends JFrame {
             frame.pack();
             frame.setVisible(true);
 
-            while (officeSetWorkers.next()) {
-                JLabel myWorker = new JLabel(officeSetWorkers.getString("name"));
+            List<Worker> allWorkers = repo.getAllWorkers();
+            for (Worker worker : allWorkers) {
+                JLabel myWorker = new JLabel(worker.getName());
                 main.add(myWorker,gbc);
                 frame.add(main);
-                PreparedStatement statmentPhones =  con.prepareStatement("select * from office.phones where office.phones.worker_id = "
-                        + officeSetWorkers.getString("id"));
-                ResultSet officeSetPhones = statmentPhones.executeQuery();
-                while (officeSetPhones.next()) {
-                    JLabel myPhones = new JLabel(officeSetPhones.getString("phone_number"));
+                for (String phone : worker.getPhones()) {
+                    JLabel myPhones = new JLabel(phone);
                     main.add(myPhones,gbc);
-
                 }
             }
             frame.setSize(500, 300);
@@ -86,41 +89,30 @@ public class Main extends JFrame {
                         }
                     });
                     secondFrame.setSize(500, 400);
-                    try {
-                        PreparedStatement searchStatement = con.prepareStatement("select office.phones.phone_number from office.phones " +
-                                "inner join office.office_worker " +
-                                "on office.office_worker.id = office.phones.worker_id " +
-                                "where office.office_worker.name = " + "'"+ searchByName.getText()+ "'"
-                        );
-                        ResultSet foundPhones = searchStatement.executeQuery();
-                        String concatinate = new String();
-                        if (!foundPhones.next()){
-                            concatinate = "Noting has been found";
-                        } else {
-                            concatinate += foundPhones.getString("phone_number") + "; ";
-                        }
-                        while (foundPhones.next()) {
-                            concatinate += foundPhones.getString("phone_number") + "; ";
-                        }
-                        JLabel foundPhone = new JLabel(concatinate);
-                        secondFrame.add(foundPhone);
+                    String concatinate = "";
+                    Optional<Worker> worker = repo.getWorkerByName(searchByName.getText());
+                    if (worker.isEmpty()){
+                        concatinate = "Noting has been found";
+                    }
+                    else {
+                        List<String>phones = worker.get().getPhones();
 
-                        secondFrame.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
-                        secondFrame.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-                        secondFrame.setVisible(true);
-                        secondFrame.getPreferredSize();
+                        for (String phone : phones) {
+                            concatinate += phone + "; ";
+                        }
 
                     }
-                    catch (SQLException e) {
-                        throw new RuntimeException(e);
-                    }
+                    JLabel foundPhone = new JLabel(concatinate);
+                    secondFrame.add(foundPhone);
+
+                    secondFrame.setModalityType(Dialog.ModalityType.APPLICATION_MODAL);
+                    secondFrame.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+                    secondFrame.setVisible(true);
+                    secondFrame.getPreferredSize();
+
                 }
 
             });
             main.add(btnSearch);
-
-        } catch (SQLException e) {
-            throw new RuntimeException(e);
-        }
     }
 }
